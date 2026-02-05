@@ -474,28 +474,9 @@ window.onload = function() {
     const reg = await navigator.serviceWorker.register('/sw.js');
     navigator.serviceWorker.ready.then((registration) => {
       console.log(`A service worker is active: ${registration.active}`);
-      // registration.active.postMessage({ type: 'SW_REGISTER_MAIN_CLIENT' });
-      // console.log('Registered as main client with SW, controller:');
     });
     return
     console.log('SW ready');
-    
-    // Register this page as the main client with the service worker
-    // This allows the SW to route all non-main-client requests through this client
-    // Retry until we have a controller
-    // let attempts = 0;
-    // while (!navigator.serviceWorker.controller && attempts < 10) {
-    //   console.log('Waiting for SW controller... attempt ' + (attempts + 1));
-    //   await new Promise(r => setTimeout(r, 1000));
-    //   attempts++;
-    // }
-    
-    // if (navigator.serviceWorker.controller) {
-    //   navigator.serviceWorker.controller.postMessage({ type: 'SW_REGISTER_MAIN_CLIENT' });
-    //   console.log('Registered as main client with SW, controller:', navigator.serviceWorker.controller);
-    // } else {
-    //   console.warn('SW controller not available after retries');
-    // }
   }
 
   registerSW().then(() => {
@@ -804,8 +785,12 @@ li button {
               </div>
               <div  class="modal-body">
                 <p>You can open a tunnel through the SSH connection to a web endpoint/url accessible only locally on the server or on other host from the server. <br>
-                  After speciffying the target url and clicking on Open the url will be opened in a new browser tab. </p>
-                <input id="forwardUrlTxt" type="text" placeholder="local or remote url eg. localhost:8080" class="form-control" >
+                  After specifying the target url and clicking on Open the url will be opened in a new browser tab. </p>
+                <p>Always specify a full url with protocol (http:// or https://). If you provided a hostname not an IP and there's an issue try it with an IP address. 
+                  Currently hostnames are resolved by executing a 'getent ahosts HOSTNAME' command on the ssh server that might be not available or fail there.
+                </p>
+                <p>NOTE: this feature is currently in beta, maybe loading certain web pages fail or renders them partially broken.</p>
+                <input id="forwardUrlTxt" type="text" placeholder="local or remote url eg. http://localhost:8080" class="form-control" >
                 
               </div>
               <div class="modal-footer">
@@ -876,7 +861,7 @@ li button {
           <div class="row">
             <div id="conInf" class="col-2 align-self-center" >
             </div>
-                <button type="button" class="btn btn-link col-md-2" onclick=" $('#forwardModal').modal('show');">Open URL through SSH Tunel</button>
+                <button type="button" class="btn btn-link col-md-2" onclick=" $('#forwardModal').modal('show');">Open URL through SSH Tunnel</button>
                 <input id="searchTxt" type="text" placeholder="Find" class="form-control col-md-2" >
                 <div class="col-md-1" style="padding-left: 20pt;padding-top: 7px;">
                   <label class="form-check-label"> <input type="checkbox" class="form-check-input" id="matchCaseChb" >Match Case</label>
@@ -894,6 +879,7 @@ li button {
                   <iframe id="fbFrame"></iframe>
               </div>
         </div>
+      </div> <!-- End of mainContentArea -->
 
       <div id="footerRow" class="row"> <!-- Footer remains a direct child of the outermost container-fluid -->
           &copy; 2019 Bela Hullar info@ssheasy.com

@@ -1,5 +1,5 @@
 // Store client configurations in a map
-// Structure: { clientId: { isPortForward: boolean, mainClientId: string } }
+// Structure: { clientId: { sshClientID: string, host: string  } }
 let clientMap = {};
 var mainClient;
 

@@ -5,12 +5,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/http/cookiejar"
-	"net/http/httputil"
 	"net/url"
 	"strings"
 
@@ -164,11 +163,11 @@ func forward(this js.Value, args []js.Value) interface{} {
 			e := h.Index(i)
 			r.Header[e.Index(0).String()] = []string{e.Index(1).String()}
 		}
-		dbg, err := httputil.DumpRequestOut(r, true)
-		if err != nil {
-			log.Printf("proxy: failed to dump request: %v", err)
-		}
-		log.Printf("request sent with id %s: [%s]", id, string(dbg))
+		// dbg, err := httputil.DumpRequestOut(r, true)
+		// if err != nil {
+		// 	log.Printf("proxy: failed to dump request: %v", err)
+		// }
+		// log.Printf("request sent with id %s: [%s]", id, string(dbg))
 		resp, err := proxyClient.Do(r)
 		if err != nil {
 			log.Printf("proxy: failed to do request: %v", err)
@@ -176,12 +175,12 @@ func forward(this js.Value, args []js.Value) interface{} {
 			return
 		}
 		defer resp.Body.Close()
-		dbg, err = httputil.DumpResponse(resp, true)
-		if err != nil {
-			log.Printf("proxy: failed to dump response: %v", err)
-		}
-		log.Printf("response received with id %s: [%s]", id, string(dbg))
-		rb, err := ioutil.ReadAll(resp.Body)
+		// dbg, err = httputil.DumpResponse(resp, true)
+		// if err != nil {
+		// 	log.Printf("proxy: failed to dump response: %v", err)
+		// }
+		// log.Printf("response received with id %s: [%s]", id, string(dbg))
+		rb, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Printf("proxy: failed to read resp: %v", err)
 			cb.Invoke(errResp(id, err))
@@ -195,45 +194,19 @@ func forward(this js.Value, args []js.Value) interface{} {
 			headers = append(headers, []interface{}{hk, hv[0]})
 		}
 
-		var bi interface{}
 		buf := uint8Array.New(len(rb))
 		js.CopyBytesToJS(buf, rb)
-		bi = buf
-		// if len(resp.Header["Content-Type"]) > 0 && strings.Contains(resp.Header["Content-Type"][0], "text/html") {
-		// 	// For HTML, rewrite relative URLs and inject base tag
-		// 	// u contains the target URL (e.g., "http://127.0.0.1:8080/path")
-		// 	bodyStr := adjustBodyWithURL(string(rb), u)
-		// 	bi = bodyStr
-		// } else {
-		// 	buf := uint8Array.New(len(rb))
-		// 	js.CopyBytesToJS(buf, rb)
-		// 	bi = buf
-		// }
+
 		log.Printf("proxy call finished with status code: %d", resp.StatusCode)
 		cb.Invoke(map[string]interface{}{
 			"id":        id,
-			"body":      bi,
+			"body":      buf,
 			"headers":   headers,
 			"status":    resp.StatusCode,
 			"resp_text": resp.Status,
 		})
 	}()
 	return nil
-}
-
-// No longer needed with the service worker proxy approach
-
-// adjustBodyWithURL returns the body as-is.
-// Since the service worker proxies all iframe/non-main-client requests through the main client,
-// we don't need to rewrite relative URLs in the HTML. Every request will go through the main
-// client's Go forward() function regardless.
-func adjustBodyWithURL(body string, targetURL string) string {
-	return body
-}
-
-func adjustBody(body []byte) []byte {
-	// Fallback for when we don't have URL info (shouldn't happen in normal flow)
-	return body
 }
 
 func errResp(id string, err error) map[string]interface{} {
