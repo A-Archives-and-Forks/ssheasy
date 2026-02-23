@@ -2,6 +2,8 @@
 
 Source repositorty of the online ssh, sftp client [ssheasy.com](https://ssheasy.com)
 
+![SSH and open tunnel in new tab](./doc/tunnel.gif)
+
 ## Building, running locally
 
 `docker-compose up`

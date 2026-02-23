@@ -209,6 +209,7 @@ func main() {
 	js.Global().Set("changeWindowSize", wc)
 	initFileBrowserAPI()
 	js.Global().Set("parsePublicKey", parsePublicKey)
+	js.Global().Set("forward", js.FuncOf(forward))
 
 	fmt.Println("main is running")
 

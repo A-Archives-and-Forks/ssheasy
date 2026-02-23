@@ -469,6 +469,120 @@ window.onload = function() {
     document.body.removeChild(element);
   }
 
+
+  async function registerSW() {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    navigator.serviceWorker.ready.then((registration) => {
+      console.log(`A service worker is active: ${registration.active}`);
+    });
+    return
+    console.log('SW ready');
+  }
+
+  registerSW().then(() => {
+    console.log('SW registered');
+    }).catch(err => {
+    console.error('SW registration failed', err);
+  });
+
+  // Handle messages from the Service Worker for intercepted fetches.
+  // The service worker posts messages with { type: 'FETCH_INTERCEPT', data: reqData }
+  // We call the Go `forward` function (exposed as `forward`) and return the response
+  // back to the service worker as { type: 'FETCH_INTERCEPT_RESPONSE', id, response }.
+  navigator.serviceWorker.addEventListener('message', async function(event) {
+    console.log('SW message received', event.data);
+    try {
+      const msg = event.data;
+      if (!msg || msg.type !== 'FETCH_INTERCEPT') return;
+      const req = msg.data || {};
+
+      // Build headers array expected by proxy.forward: [[name, value], ...]
+      const headersArr = [];
+      if (req.headers && typeof req.headers === 'object') {
+        for (const k of Object.keys(req.headers)) {
+          headersArr.push([k, req.headers[k]]);
+        }
+      }
+
+      // Prepare body as Uint8Array (forward expects a typed array for non-GET/HEAD)
+      let bodyUint8 = new Uint8Array(0);
+      if (req.body !== undefined && req.body !== null && req.body !== '') {
+        if (typeof req.body === 'string') {
+          bodyUint8 = new TextEncoder().encode(req.body);
+        } else if (req.body instanceof ArrayBuffer) {
+          bodyUint8 = new Uint8Array(req.body);
+        } else if (req.body instanceof Uint8Array) {
+          bodyUint8 = req.body;
+        } else {
+          // Fallback: stringify
+          bodyUint8 = new TextEncoder().encode(String(req.body));
+        }
+      }
+
+      const requestObj = {
+        id: req.id,
+        host: req.host,
+        ssheasyHost: window.location.host,
+        sshClientID: req.sshClientID,
+        method: req.method,
+        url: req.url,
+        headers: headersArr,
+        body: bodyUint8,
+      };
+
+      const postResponseToSW = resp => {
+        const payload = { type: 'FETCH_INTERCEPT_RESPONSE', id: req.id, response: resp };
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage(payload);
+        } else {
+          // fallback to registration.active
+          navigator.serviceWorker.ready.then(reg => {
+            if (reg && reg.active) reg.active.postMessage(payload);
+          }).catch(() => {});
+        }
+      };
+
+      if (typeof forward !== 'function') {
+        postResponseToSW({ status: 500, body: 'forward not available', headers: [] });
+        return;
+      }
+
+      forward(requestObj, function(res) {
+        try {
+          postResponseToSW(res);
+        } catch (e) {
+          postResponseToSW({ status: 500, body: String(e), headers: [] });
+        }
+      });
+    } catch (err) {
+      console.error('Error handling SW fetch intercept message', err);
+    }
+  });
+
+
+  openWebTunel = function(url) {
+    var myID
+    fetch('/registerportforward')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(data => {
+            console.log('Successfully registered port forward:', data);
+            myID = data;
+            if (myID == null || myID == "" ) {
+              console.error('client id cannot be tetrieved', myID);
+              return
+            }
+            window.open("/portforward/" + myID + "/" + url, '_blank').focus();
+        })
+        .catch(error => {
+            console.error('Error registering port forward:', error);
+        });
+  }
+
   $(document).ready(function(){
     $('#conBtn').prop('disabled',true);
     $('#hostInp').keyup(function(){ $('#conBtn').prop('disabled', notReady() ? true : false); })
@@ -659,6 +773,33 @@ li button {
             </div>
           </div>
         </div>
+
+        <div id="forwardModal" class="modal" tabindex="-1" role="dialog">
+          <div class="modal-dialog" role="document">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Open SSH tunnel</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <div  class="modal-body">
+                <p>You can open a tunnel through the SSH connection to a web endpoint/url accessible only locally on the server or on other host from the server. <br>
+                  After specifying the target url and clicking on Open the url will be opened in a new browser tab. </p>
+                <p>Always specify a full url with protocol (http:// or https://). If you provided a hostname not an IP and there's an issue try it with an IP address. 
+                  Currently hostnames are resolved by executing a 'getent ahosts HOSTNAME' command on the ssh server that might be not available or fail there.
+                </p>
+                <p>NOTE: this feature is currently in beta, maybe loading certain web pages fail or renders them partially broken.</p>
+                <input id="forwardUrlTxt" type="text" placeholder="local or remote url eg. http://localhost:8080" class="form-control" >
+                
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal"   onclick="openWebTunel($('#forwardUrlTxt').val());">Open</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
       
     <div class="container-fluid" > 
       <div id="headerRow" class="row" >  
@@ -718,9 +859,10 @@ li button {
             </div>
           </div>
           <div class="row">
-            <div id="conInf" class="col-3 align-self-center" >
+            <div id="conInf" class="col-2 align-self-center" >
             </div>
-                <input id="searchTxt" type="text" placeholder="Find" class="form-control col-md-3" >
+                <button type="button" class="btn btn-link col-md-2" onclick=" $('#forwardModal').modal('show');">Open URL through SSH Tunnel</button>
+                <input id="searchTxt" type="text" placeholder="Find" class="form-control col-md-2" >
                 <div class="col-md-1" style="padding-left: 20pt;padding-top: 7px;">
                   <label class="form-check-label"> <input type="checkbox" class="form-check-input" id="matchCaseChb" >Match Case</label>
                 </div>
@@ -736,11 +878,11 @@ li button {
                     <div class="iframe-container col-md-10 offset-md-1">
                   <iframe id="fbFrame"></iframe>
               </div>
-          </div>
+        </div>
       </div> <!-- End of mainContentArea -->
 
       <div id="footerRow" class="row"> <!-- Footer remains a direct child of the outermost container-fluid -->
-          &copy; 2019 Bela Hullar info@webssh.com
+          &copy; 2019 Bela Hullar info@ssheasy.com
       </div>
     </div> <!-- End of outermost container-fluid -->
    
